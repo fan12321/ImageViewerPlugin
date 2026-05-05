@@ -28,6 +28,26 @@ float fmodf(float x, float y)
 return x - y * floor(x / y);
 }
 
+vec3 RGBtoHCV(vec3 rgb)
+{
+    // RGB [0..1] to Hue-Chroma-Value [0..1]
+    // Based on work by Sam Hocevar and Emil Persson
+    vec4 p = (rgb.g < rgb.b) ? vec4(rgb.bg, -1., 2. / 3.) : vec4(rgb.gb, 0., -1. / 3.);
+    vec4 q = (rgb.r < p.x) ? vec4(p.xyw, rgb.r) : vec4(rgb.r, p.yzx);
+    float c = q.x - min(q.w, q.y);
+    float h = abs((q.w - q.y) / (6. * c + 1e-10) + q.z);
+    return vec3(h, c, q.x);
+}
+
+vec3 rgbToHsl(vec3 rgb)
+{
+    // RGB [0..1] to Hue-Saturation-Lightness [0..1]
+    vec3 hcv = RGBtoHCV(rgb);
+    float z = hcv.z - hcv.y * 0.5;
+    float s = hcv.y / (1. - abs(z * 2. - 1.) + 1e-10);
+    return vec3(hcv.x, s, z);
+}
+
 // Convert from HSL to RGB color space 
 vec3 hslToRgb(float hue, float saturation, float lightness)
 {
@@ -128,7 +148,19 @@ void main(void)
             // Grab channel(s)
             float channel = toneMapChannel(displayRanges[0].x, displayRanges[0].y, texture(channelTextures, vec3(uv, 0)).r);
 
+            float intensity = toneMapChannel(displayRanges[1].x, displayRanges[1].y, texture(channelTextures, vec3(uv, 1)).r);
+
             fragmentColor = texture(colorMapTexture, vec2(channel, 0));
+
+            float minBackground = displayRanges[1].x;
+            float maxBackground = displayRanges[1].y;
+            vec3 hsl = rgbToHsl(fragmentColor.rgb);
+            float lightnessScaling = 0.0;
+            if (maxBackground - minBackground > 0.001) 
+                lightnessScaling = (intensity - 0.5) * 0.5;
+
+            vec3 adjustedRgb = hslToRgb(360.0f * hsl.r, hsl.g, clamp(hsl.b + lightnessScaling, 0.0, 1.0));
+            fragmentColor.rgb = adjustedRgb;
 
             break;
         }

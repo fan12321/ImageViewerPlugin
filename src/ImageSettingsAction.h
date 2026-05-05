@@ -47,7 +47,7 @@ public:
 protected: // Color map
 
     /** Get color map image */
-    QImage getColorMapImage() const;
+    QImage getColorMapImage();
 
     /** Update the color map image and notify others */
     void updateColorMapImage();
@@ -128,6 +128,12 @@ protected:
     ColorAction             _constantColorAction;                   /** Color action */
     QTimer                  _updateSelectionTimer;                  /** Timer to update layer selection when appropriate */
     QTimer                  _updateScalarDataTimer;                 /** Timer to update layer scalar data when appropriate */
+
+    ToggleAction            _useBackgroundAction;
+    OptionAction            _backgroundDimAction;
+    float                   _backgroundMin{0.0}, _backgroundMax{0.0};
+    QVector<float>          _scalarData;
+    QPair<float, float>     _scalarDataRange{0.0, 0.0};
 
     static const std::int32_t LAZY_UPDATE_INTERVAL = 0;
 };

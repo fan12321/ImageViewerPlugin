@@ -25,11 +25,15 @@ ImageSettingsAction::ImageSettingsAction(QObject* parent, const QString& title) 
     _interpolationTypeAction(this, "Interpolate", interpolationTypes.values(), "Bilinear"),
     _useConstantColorAction(this, "Use constant color", false),
     _fixChannelRangesToColorSpaceAction(this, "Set channel ranges to color space", false),
-    _constantColorAction(this, "Constant color", QColor(Qt::white))
+    _constantColorAction(this, "Constant color", QColor(Qt::white)), 
+    _useBackgroundAction(this, "Background"), 
+    _backgroundDimAction(this, "Background Dimension")
 {
     addAction(&_opacityAction);
     addAction(&_subsampleFactorAction);
     addAction(&_colorSpaceAction);
+    addAction(&_useBackgroundAction);
+    addAction(&_backgroundDimAction);
     addAction(&_scalarChannel1Action);
     addAction(&_scalarChannel2Action);
     addAction(&_scalarChannel3Action);
@@ -41,6 +45,9 @@ ImageSettingsAction::ImageSettingsAction(QObject* parent, const QString& title) 
     addAction(&_constantColorAction);
 
     _subsampleFactorAction.setVisible(false);
+
+    _useBackgroundAction.setVisible(false);
+    _backgroundDimAction.setVisible(false);
 
     _opacityAction.setToolTip("Image layer opacity");
     _subsampleFactorAction.setToolTip("Subsampling factor");
@@ -188,6 +195,26 @@ void ImageSettingsAction::initialize(Layer* layer)
         _scalarChannel1Action.getWindowLevelAction().setEnabled(false);
         _scalarChannel2Action.getWindowLevelAction().setEnabled(false);
         _scalarChannel3Action.getWindowLevelAction().setEnabled(false);
+
+        _useBackgroundAction.setVisible(true);
+        _useBackgroundAction.setChecked(false);
+        _backgroundDimAction.setVisible(true);
+        _backgroundDimAction.setEnabled(false);
+        connect(&_useBackgroundAction, &ToggleAction::toggled, this, [this]() { _backgroundDimAction.setEnabled(_useBackgroundAction.isChecked()); });
+        // get parent point dataset's dimensions
+        auto parent = Dataset<Clusters>(_layer->getSourceDataset());
+        while (parent->getDataType() != PointType) {
+            parent = parent->getParent();
+        }
+        Dataset<Points> points = parent;
+        if (points.isValid()) {
+            QStringList parentDimNames;
+            for (auto name: points->getDimensionNames()) parentDimNames << name;
+
+            _backgroundDimAction.setOptions(parentDimNames);
+            _backgroundDimAction.setCurrentIndex(0);
+        }
+
     }
     else {
         if (_layer->getNumberOfImages() >= 2) {
@@ -198,6 +225,9 @@ void ImageSettingsAction::initialize(Layer* layer)
             _scalarChannel3Action.getDimensionAction().setCurrentIndex(2);
         }
     }
+
+    connect(&_backgroundDimAction, &OptionAction::currentIndexChanged, this, &ImageSettingsAction::updateColorMapImage);
+    connect(&_useBackgroundAction, &ToggleAction::toggled, this, &ImageSettingsAction::updateColorMapImage);
 
     connect(&_colorMap1DAction, &ColorMapAction::imageChanged, this, &ImageSettingsAction::updateColorMapImage);
     connect(&_colorMap2DAction, &ColorMapAction::imageChanged, this, &ImageSettingsAction::updateColorMapImage);
@@ -274,10 +304,46 @@ const std::uint32_t ImageSettingsAction::getNumberOfActiveScalarChannels() const
     return 0;
 }
 
-QImage ImageSettingsAction::getColorMapImage() const
+QImage ImageSettingsAction::getColorMapImage()
 {
     if (_layer->getSourceDataset()->getDataType() == ClusterType) {
         const auto& clusters = Dataset<Clusters>(_layer->getSourceDataset())->getClusters();
+
+        // get parent point dataset's dimensions
+        auto parent = Dataset<Clusters>(_layer->getSourceDataset());
+        while (parent->getDataType() != PointType) {
+            parent = parent->getParent();
+        }
+        Dataset<Points> points = parent;
+        _backgroundMin = 0.0;
+        _backgroundMax = 0.0;
+        if (points.isValid() && _useBackgroundAction.isChecked()) {
+            float min = std::numeric_limits<float>::max();
+            float max = std::numeric_limits<float>::min();
+            int dim = _backgroundDimAction.getCurrentIndex();
+            for (const auto& cluster: clusters) {
+                if (dim < 0) break;
+                int numIndices = cluster.getNumberOfIndices();
+                std::vector<float> data(numIndices);
+                points->populateDataForDimensions(data, std::vector<int>{dim}, cluster.getIndices());
+                min = std::min(*std::min_element(data.begin(), data.end()), min);
+                max = std::max(*std::max_element(data.begin(), data.end()), max);
+            }
+            _backgroundMin = min;
+            _backgroundMax = max;
+
+            if (dim >= 0) {
+                int numPixels = _layer->getImagesDataset()->getNumberOfPixels();
+                std::vector<float> fullImage(numPixels);
+                points->extractDataForDimension(fullImage, dim);
+                
+                _scalarData.clear();
+                _scalarData.reserve(numPixels);
+                std::copy(fullImage.begin(), fullImage.end(), std::back_inserter(_scalarData));
+            }
+        }
+        _scalarDataRange.first = _backgroundMin;
+        _scalarDataRange.second = _backgroundMax;
 
         QImage discreteColorMapImage(static_cast<std::int32_t>(clusters.size()), 1, QImage::Format::Format_RGB32);
 
@@ -323,8 +389,12 @@ void ImageSettingsAction::updateColorMapImage()
     }
 
 
-    if (_colorSpaceAction.getCurrentIndex() <= 1)
+    if (_colorSpaceAction.getCurrentIndex() <= 1) {
         _layer->setColorMapImage(getColorMapImage(), interpolationType);
+        if (_layer->getSourceDataset()->getDataType() == ClusterType && _scalarData.size() > 0) {
+            _layer->setChannelScalarData(ScalarChannelAction::Identifier::Channel2, _scalarData, _scalarDataRange);
+        }
+    }
 }
 
 void ImageSettingsAction::colorSpaceChanged()

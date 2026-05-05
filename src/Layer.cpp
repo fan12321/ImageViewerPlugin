@@ -289,6 +289,14 @@ void Layer::setColorMapImage(const QImage& colorMapImage, const InterpolationTyp
     invalidate();
 }
 
+void Layer::setChannelScalarData(const std::uint32_t& channelIndex, const QVector<float>& scalarData, const QPair<float, float>& displayRange)
+{
+    auto imageProp = this->getPropByName<ImageProp>("ImageProp");
+
+    imageProp->setChannelScalarData(channelIndex, scalarData, displayRange);
+    invalidate();
+}
+
 void Layer::updateWindowTitle()
 {
     try {

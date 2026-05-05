@@ -187,6 +187,7 @@ protected: // Rendering
      * @param interpolationType Interpolation type
      */
     void setColorMapImage(const QImage& colorMapImage, const InterpolationType& interpolationType);
+    void setChannelScalarData(const std::uint32_t& channelIndex, const QVector<float>& scalarData, const QPair<float, float>& displayRange);
 
 protected: // Miscellaneous
 
