@@ -197,7 +197,7 @@ void ImageSettingsAction::initialize(Layer* layer)
         _scalarChannel3Action.getWindowLevelAction().setEnabled(false);
 
         _useBackgroundAction.setVisible(true);
-        _useBackgroundAction.setChecked(false);
+        _useBackgroundAction.setChecked(true);
         _backgroundDimAction.setVisible(true);
         _backgroundDimAction.setEnabled(false);
         connect(&_useBackgroundAction, &ToggleAction::toggled, this, [this]() { _backgroundDimAction.setEnabled(_useBackgroundAction.isChecked()); });
