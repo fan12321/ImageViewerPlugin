@@ -324,10 +324,12 @@ QImage ImageSettingsAction::getColorMapImage()
             for (const auto& cluster: clusters) {
                 if (dim < 0) break;
                 int numIndices = cluster.getNumberOfIndices();
-                std::vector<float> data(numIndices);
-                points->populateDataForDimensions(data, std::vector<int>{dim}, cluster.getIndices());
-                min = std::min(*std::min_element(data.begin(), data.end()), min);
-                max = std::max(*std::max_element(data.begin(), data.end()), max);
+                if (numIndices > 0) {
+                    std::vector<float> data(numIndices);
+                    points->populateDataForDimensions(data, std::vector<int>{dim}, cluster.getIndices());
+                    min = std::min(*std::min_element(data.begin(), data.end()), min);
+                    max = std::max(*std::max_element(data.begin(), data.end()), max);
+                }
             }
             _backgroundMin = min;
             _backgroundMax = max;
